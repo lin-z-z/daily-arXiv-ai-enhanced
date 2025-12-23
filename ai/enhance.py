@@ -81,7 +81,7 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
         # 尝试从错误信息中提取 JSON 字符串并修复
         error_msg = str(e)
         partial_data = {}
-        
+
         if "Function Structure arguments:" in error_msg:
             try:
                 # 提取 JSON 字符串
@@ -93,10 +93,52 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
                 print(f"{json_str[:500]}", file=sys.stderr)
                 print(f"{'='*60}\n", file=sys.stderr)
 
-                # 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
-                json_str = json_str.replace('\\', '\\\\')
-                # 尝试解析修复后的 JSON
-                partial_data = json.loads(json_str)
+                # 尝试解析 DeepSeek 的特殊函数调用格式
+                import re
+
+                if '<｜DSML｜' in json_str:
+                    print(f"Detected DeepSeek DSML format, parsing...", file=sys.stderr)
+                    # 提取所有参数
+                    param_pattern = r'<｜DSML｜parametername="(\w+)"[^>]*>([^<]*)</｜DSML｜parameter>'
+                    matches = re.findall(param_pattern, json_str)
+                    for param_name, param_value in matches:
+                        if param_name in default_ai_fields:
+                            partial_data[param_name] = param_value.strip()
+                    print(f"Extracted {len(partial_data)} fields from DSML format", file=sys.stderr)
+                # 尝试解析简单的XML标签格式 <tldr>...</tldr>
+                elif any(f'<{field}>' in json_str for field in default_ai_fields.keys()):
+                    print(f"Detected simple XML tag format, parsing...", file=sys.stderr)
+                    for field in default_ai_fields.keys():
+                        pattern = f'<{field}>([^<]*)</{field}>'
+                        match = re.search(pattern, json_str, re.DOTALL)
+                        if match:
+                            partial_data[field] = match.group(1).strip()
+                    print(f"Extracted {len(partial_data)} fields from XML format", file=sys.stderr)
+                # 处理空JSON后跟文本的情况
+                elif json_str.startswith('{}') and len(json_str) > 2:
+                    print(f"Detected empty JSON with trailing text, attempting to parse...", file=sys.stderr)
+                    # 尝试从后面的文本中提取DSML格式
+                    if '<｜DSML｜' in json_str:
+                        param_pattern = r'<｜DSML｜parametername="(\w+)"[^>]*>([^<]*)</｜DSML｜parameter>'
+                        matches = re.findall(param_pattern, json_str)
+                        for param_name, param_value in matches:
+                            if param_name in default_ai_fields:
+                                partial_data[param_name] = param_value.strip()
+                        print(f"Extracted {len(partial_data)} fields from trailing DSML", file=sys.stderr)
+                    # 尝试提取简单XML标签
+                    elif any(f'<{field}>' in json_str for field in default_ai_fields.keys()):
+                        for field in default_ai_fields.keys():
+                            pattern = f'<{field}>([^<]*)</{field}>'
+                            match = re.search(pattern, json_str, re.DOTALL)
+                            if match:
+                                partial_data[field] = match.group(1).strip()
+                        print(f"Extracted {len(partial_data)} fields from trailing XML", file=sys.stderr)
+                else:
+                    # 原有的JSON修复逻辑
+                    # 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
+                    json_str = json_str.replace('\\', '\\\\')
+                    # 尝试解析修复后的 JSON
+                    partial_data = json.loads(json_str)
             except Exception as json_e:
                 print(f"Failed to parse JSON for {item.get('id', 'unknown')}: {json_e}", file=sys.stderr)
                 print(f"JSON string that failed: {json_str[:200]}...", file=sys.stderr)

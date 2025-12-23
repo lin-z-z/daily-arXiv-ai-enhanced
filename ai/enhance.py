@@ -86,6 +86,10 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
             try:
                 # 提取 JSON 字符串
                 json_str = error_msg.split("Function Structure arguments:", 1)[1].strip().split('are not valid JSON')[0].strip()
+
+                # 首先统一替换中文标点符号为英文标点（在所有解析之前）
+                json_str = json_str.replace('"', '"').replace('"', '"').replace(''', "'").replace(''', "'")
+
                 # 打印原始JSON字符串用于调试
                 print(f"\n{'='*60}", file=sys.stderr)
                 print(f"Paper ID: {item.get('id', 'unknown')}", file=sys.stderr)
@@ -170,9 +174,7 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
                         print(f"Extracted {len(partial_data)} fields from trailing XML", file=sys.stderr)
                 else:
                     # 原有的JSON修复逻辑
-                    # 1. 替换中文引号为英文引号
-                    json_str = json_str.replace('"', '"').replace('"', '"').replace(''', "'").replace(''', "'")
-                    # 2. 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
+                    # 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
                     json_str = json_str.replace('\\', '\\\\')
                     # 尝试解析修复后的 JSON
                     partial_data = json.loads(json_str)

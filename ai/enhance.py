@@ -86,12 +86,20 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
             try:
                 # 提取 JSON 字符串
                 json_str = error_msg.split("Function Structure arguments:", 1)[1].strip().split('are not valid JSON')[0].strip()
+                # 打印原始JSON字符串用于调试
+                print(f"\n{'='*60}", file=sys.stderr)
+                print(f"Paper ID: {item.get('id', 'unknown')}", file=sys.stderr)
+                print(f"Original JSON string (first 500 chars):", file=sys.stderr)
+                print(f"{json_str[:500]}", file=sys.stderr)
+                print(f"{'='*60}\n", file=sys.stderr)
+
                 # 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
                 json_str = json_str.replace('\\', '\\\\')
                 # 尝试解析修复后的 JSON
                 partial_data = json.loads(json_str)
             except Exception as json_e:
                 print(f"Failed to parse JSON for {item.get('id', 'unknown')}: {json_e}", file=sys.stderr)
+                print(f"JSON string that failed: {json_str[:200]}...", file=sys.stderr)
         
         # Merge partial data with defaults to ensure all fields exist
         item['AI'] = {**default_ai_fields, **partial_data}

@@ -98,13 +98,32 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
 
                 if '<｜DSML｜' in json_str:
                     print(f"Detected DeepSeek DSML format, parsing...", file=sys.stderr)
-                    # 提取所有参数
+                    # 提取所有参数 - 使用更宽松的匹配，允许参数名有轻微拼写错误
                     param_pattern = r'<｜DSML｜parametername="(\w+)"[^>]*>([^<]*)</｜DSML｜parameter>'
                     matches = re.findall(param_pattern, json_str)
                     for param_name, param_value in matches:
-                        if param_name in default_ai_fields:
-                            partial_data[param_name] = param_value.strip()
+                        # 修正常见的拼写错误
+                        corrected_name = param_name
+                        if param_name.startswith('tldr'):
+                            corrected_name = 'tldr'
+
+                        if corrected_name in default_ai_fields:
+                            partial_data[corrected_name] = param_value.strip()
                     print(f"Extracted {len(partial_data)} fields from DSML format", file=sys.stderr)
+                # 尝试解析类JSON对象格式 {tldr:"...",motivation:"..."}
+                elif any(f'{field}:"' in json_str or f'{field}:\\"' in json_str for field in default_ai_fields.keys()):
+                    print(f"Detected JSON-like object format, parsing...", file=sys.stderr)
+                    for field in default_ai_fields.keys():
+                        # 匹配 field:"value" 或 field:\"value\"
+                        pattern = f'{field}:\\s*\\"?([^",}}]+)'
+                        match = re.search(pattern, json_str, re.DOTALL)
+                        if match:
+                            value = match.group(1).strip()
+                            # 移除可能的尾部引号
+                            if value.endswith('\\"') or value.endswith('"'):
+                                value = value[:-1] if value.endswith('"') else value[:-2]
+                            partial_data[field] = value
+                    print(f"Extracted {len(partial_data)} fields from JSON-like format", file=sys.stderr)
                 # 尝试解析简单的XML标签格式 <tldr>...</tldr>
                 elif any(f'<{field}>' in json_str for field in default_ai_fields.keys()):
                     print(f"Detected simple XML tag format, parsing...", file=sys.stderr)
@@ -117,19 +136,35 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
                 # 处理空JSON后跟文本的情况
                 elif json_str.startswith('{}') and len(json_str) > 2:
                     print(f"Detected empty JSON with trailing text, attempting to parse...", file=sys.stderr)
+                    trailing_text = json_str[2:]  # 去掉开头的 {}
+
                     # 尝试从后面的文本中提取DSML格式
-                    if '<｜DSML｜' in json_str:
+                    if '<｜DSML｜' in trailing_text:
                         param_pattern = r'<｜DSML｜parametername="(\w+)"[^>]*>([^<]*)</｜DSML｜parameter>'
-                        matches = re.findall(param_pattern, json_str)
+                        matches = re.findall(param_pattern, trailing_text)
                         for param_name, param_value in matches:
-                            if param_name in default_ai_fields:
-                                partial_data[param_name] = param_value.strip()
+                            corrected_name = param_name
+                            if param_name.startswith('tldr'):
+                                corrected_name = 'tldr'
+                            if corrected_name in default_ai_fields:
+                                partial_data[corrected_name] = param_value.strip()
                         print(f"Extracted {len(partial_data)} fields from trailing DSML", file=sys.stderr)
+                    # 尝试提取类JSON对象格式
+                    elif any(f'{field}:"' in trailing_text or f'{field}:\\"' in trailing_text for field in default_ai_fields.keys()):
+                        for field in default_ai_fields.keys():
+                            pattern = f'{field}:\\s*\\"?([^",}}]+)'
+                            match = re.search(pattern, trailing_text, re.DOTALL)
+                            if match:
+                                value = match.group(1).strip()
+                                if value.endswith('\\"') or value.endswith('"'):
+                                    value = value[:-1] if value.endswith('"') else value[:-2]
+                                partial_data[field] = value
+                        print(f"Extracted {len(partial_data)} fields from trailing JSON-like", file=sys.stderr)
                     # 尝试提取简单XML标签
-                    elif any(f'<{field}>' in json_str for field in default_ai_fields.keys()):
+                    elif any(f'<{field}>' in trailing_text for field in default_ai_fields.keys()):
                         for field in default_ai_fields.keys():
                             pattern = f'<{field}>([^<]*)</{field}>'
-                            match = re.search(pattern, json_str, re.DOTALL)
+                            match = re.search(pattern, trailing_text, re.DOTALL)
                             if match:
                                 partial_data[field] = match.group(1).strip()
                         print(f"Extracted {len(partial_data)} fields from trailing XML", file=sys.stderr)

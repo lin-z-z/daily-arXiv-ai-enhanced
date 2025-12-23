@@ -170,7 +170,9 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
                         print(f"Extracted {len(partial_data)} fields from trailing XML", file=sys.stderr)
                 else:
                     # 原有的JSON修复逻辑
-                    # 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
+                    # 1. 替换中文引号为英文引号
+                    json_str = json_str.replace('"', '"').replace('"', '"').replace(''', "'").replace(''', "'")
+                    # 2. 预处理 LaTeX 数学符号 - 使用四个反斜杠来确保正确转义
                     json_str = json_str.replace('\\', '\\\\')
                     # 尝试解析修复后的 JSON
                     partial_data = json.loads(json_str)
@@ -199,6 +201,9 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
 
 def process_all_items(data: List[Dict], model_name: str, language: str, max_workers: int) -> List[Dict]:
     """并行处理所有数据项"""
+    # 使用 function_calling 方法进行结构化输出
+    # 如果模型不支持 function_calling，可以尝试改为 method="json_mode"
+    # 或者完全移除 with_structured_output，在提示词中要求JSON格式
     llm = ChatOpenAI(model=model_name).with_structured_output(Structure, method="function_calling")
     print('Connect to:', model_name, file=sys.stderr)
     

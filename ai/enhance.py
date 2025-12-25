@@ -72,18 +72,29 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
     }
     
     try:
-        response: Structure = chain.invoke({
-            "language": language,
-            "content": item['summary']
-        })
-        # 调试信息：打印返回的内容
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"Paper ID: {item.get('id', 'unknown')}", file=sys.stderr)
-        print(f"Response type: {type(response)}", file=sys.stderr)
-        print(f"Response value: {response}", file=sys.stderr)
-        print(f"Response repr: {repr(response)}", file=sys.stderr)
+        print(f"Calling chain.invoke()...", file=sys.stderr)
+
+        # 尝试直接调用 LLM 而不使用 structured output 来看原始响应
+        try:
+            response: Structure = chain.invoke({
+                "language": language,
+                "content": item['summary']
+            })
+            print(f"Response type: {type(response)}", file=sys.stderr)
+            print(f"Response: {response}", file=sys.stderr)
+        except Exception as invoke_error:
+            print(f"Exception during invoke: {type(invoke_error).__name__}: {invoke_error}", file=sys.stderr)
+            raise
+
         print(f"{'='*60}\n", file=sys.stderr)
-        item['AI'] = response.model_dump()
+
+        if response is None:
+            print(f"WARNING: Response is None, using default fields", file=sys.stderr)
+            item['AI'] = default_ai_fields
+        else:
+            item['AI'] = response.model_dump()
     except langchain_core.exceptions.OutputParserException as e:
         # 尝试从错误信息中提取 JSON 字符串并修复
         error_msg = str(e)

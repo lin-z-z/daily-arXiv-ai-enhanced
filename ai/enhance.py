@@ -76,6 +76,13 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
             "language": language,
             "content": item['summary']
         })
+        # 调试信息：打印返回的内容
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"Paper ID: {item.get('id', 'unknown')}", file=sys.stderr)
+        print(f"Response type: {type(response)}", file=sys.stderr)
+        print(f"Response value: {response}", file=sys.stderr)
+        print(f"Response repr: {repr(response)}", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
         item['AI'] = response.model_dump()
     except langchain_core.exceptions.OutputParserException as e:
         # 尝试从错误信息中提取 JSON 字符串并修复
